@@ -1,4 +1,4 @@
-KERNEL_SRC := ../linux-4.13
+KERNEL_SRC := ../linux-5.4
 
 .PHONY: all
 
