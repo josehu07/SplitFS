@@ -153,11 +153,7 @@ struct full_dr {
 #define DIRTY_TRACKING 0
 #define NUM_NODE_LISTS 1
 
-#if WORKLOAD_YCSB | WORKLOAD_ROCKSDB
-#define INIT_NUM_DR 10
-#else
 #define INIT_NUM_DR 2
-#endif
 
 #define INIT_NUM_DR_OVER 2
 #define BG_NUM_DR 2

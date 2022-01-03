@@ -1,171 +1,141 @@
-## SplitFS
+# SplitFS - Linux v5.4.0
 
-[SplitFS](https://github.com/utsaslab/SplitFS) is a file system for Persistent Memory (PM) which is aimed at reducing the software overhead of applications accessing Persistent Memory. SplitFS presents a novel split of responsibilities between a user-space library file system and an existing kernel PM file system. The user-space library file system handles data operations by intercepting POSIX calls, memory mapping the underlying file, and serving the reads and overwrites using processor loads and stores. Metadata operations are handled by the kernel file system (ext4 DAX). 
+This is a port of [SplitFS](https://github.com/utsaslab/SplitFS) to Linux kernel v5.4.0 for Ubuntu Focal 20.04.
 
-SplitFS introduces a new primitive termed relink to efficiently support file appends and atomic data operations. SplitFS provides three consistency modes, which different applications can choose from without interfering with each other.
+Contents:
 
-SplitFS is built on top of [Quill](https://github.com/NVSL/Quill) by NVSL. We re-use the implementation of Quill to track the glibc calls requested by an application and provide our implementation for the calls. We then run the applications using LD_PRELOAD to intercept the calls during runtime and forward them to SplitFS.
+1. `kernel/`: source code of Linux kernel v5.4.0, with the relink operation added as `dynamic_remap` syscall at entry index `335` for `x86_64`
+2. `splitfs/`: source code of SplitFS
+3. `tests/`: PJD Posix FS test suite
+4. `micro/`: a simple toy microbenchmark
 
-Please cite the following paper if you use SplitFS:
-
-**SplitFS : Reducing Software Overhead in File Systems for Persistent Memory**.
-Rohan Kadekodi, Se Kwon Lee, Sanidhya Kashyap, Taesoo Kim, Aasheesh Kolli, Vijay Chidambaram. 
-*Proceedings of the The 27th ACM Symposium on Operating Systems Principles (SOSP 19)*. 
-[Paper PDF](https://www.cs.utexas.edu/~vijay/papers/sosp19-splitfs.pdf). [Bibtex](https://www.cs.utexas.edu/~vijay/bibtex/sosp19-splitfs.bib). [Talk Video](https://sosp19.rcs.uwaterloo.ca/videos/D3-S1-P4.mp4)
-
-~~~~
-@InProceedings{KadekodiEtAl19-SplitFS,
-  title =        "{SplitFS: Reducing Software Overhead in File Systems for Persistent Memory}",
-  author =       "Rohan Kadekodi and Se Kwon Lee and  Sanidhya Kashyap and  Taesoo Kim and  Vijay Chidambaram",
-  booktitle =    "Proceedings of the 27th ACM Symposium on Operating
-                  Systems Principles (SOSP '19)",
-  month =        "October",
-  year =         "2019",
-  address =      "Ontario, Canada",
-}
-~~~~
-
-## Getting Started with SplitFS
-
-This tutorial walks you through the workflow of compiling splitfs, setting up ext4-DAX, compiling an application and running it with ext4-DAX as well as SplitFS, using a simple microbenchmark. The microbenchmark appends 128MB data to an empty file, in chunks of 4KB each, and does an fsync() at the end. Note: Set the minimum partition size of PM to 2GiB for the microbenchmark (The partition size can be set in step 2. Please confirm the partition size using `df -h` after step 4).
-
-1. [<b>Installing Dependencies</b>](#dependencies)
-
-2. [<b>Setup kernel</b>](https://github.com/utsaslab/SplitFS/blob/master/experiments.md/#kernel-setup)
-
-3. <b>Set up SplitFS</b>
-```
-$ export LEDGER_YCSB=1
-$ cd splitfs; make clean; make; cd .. # Compile SplitFS
-$ export LD_LIBRARY_PATH=./splitfs
-$ export NVP_TREE_FILE=./splitfs/bin/nvp_nvp.tree
-```
-4. #### Set up ext4-DAX 
-```
-$ sudo mkfs.ext4 -b 4096 /dev/pmem0
-$ sudo mount -o dax /dev/pmem0 /mnt/pmem_emul
-$ sudo chown -R $USER:$USER /mnt/pmem_emul
-```
-5. <b>Setup microbenchmark </b>
-```
-$ cd micro
-$ gcc rw_experiment.c -o rw_expt -O3
-$ cd ..
-```
-6. <b>Run microbenchmark with ext4-DAX </b>
-```
-$ sync && echo 3 > /proc/sys/vm/drop_caches # Run this with superuser
-$ ./micro/rw_expt write seq 4096
-$ rm -rf /mnt/pmem_emul/*
-```
-7. <b>Run microbenchmark with SplitFS</b>
-```
-$ sync && echo 3 > /proc/sys/vm/drop_caches # Run this with superuser
-$ LD_PRELOAD=./splitfs/libnvp.so micro/rw_expt write seq 4096
-$ rm -rf /mnt/pmem_emul/*
-```
-8. <b>Results</b>. The resultes show the throughput of doing appends on ext4 DAX and SplitFS. Appends are **5.8x** faster on SplitFS.
-    * ext4-DAX: `0.33M appends/sec`
-    * SplitFS: `1.92M appends/sec`
-
-## Features
-
-1. **Low software overhead**. SplitFS tries to obtain performance that is close to the maximum provided by persistent-memory hardware. The overhead due to SplitFS software is significantly lower (by 4-12x) than state-of-the-art file systems such as NOVA or ext4 DAX. As a result, performance on some applications is increased by as much as **2x**.  
-
-2. **Flexible guarantees**. SplitFS is the only persistent-memory file system that allows simultaneously running applications to receive different guarantees from the file system. SplitFS offers three modes: POSIX, Sync, and Strict. Application A may in Strict mode, obtaining atomic, synchronous operations from SplitFS, while Application B may simultaneously run in POSIX mode and obtain higher performance. This is possible due to the novel split architecture used in SplitFS. 
-
-3. **Portability and Stability**. SplitFS uses ext4 DAX as its kernel component, so it works with any kernel where ext4 DAX is supported. ext4 DAX is a mature, robust code base that is actively being maintained and developed; as ext4 DAX performance increases over time, SplitFS performance increases as well. This is contrast to research file systems for persistent memory, which do not see development at the same rate as ext4 DAX.  
-
-## Contents
-
-1. `splitfs/` contains the source code for SplitFS-POSIX
-2. `dependencies/` contains packages and scripts to resolve dependencies
-3. `kernel/` contains the Linux 4.13.0 kernel
-4. `micro/` contains the microbenchmark
-5. `leveldb/` contains LevelDB source code
-6. `rsync/` contains the rsync source code
-7. `scripts/` contains scripts to compile and run workloads and kernel
-8. `splitfs-so/` contains the SplitFS-strict shared libraries for running different workloads
-9. `sqlite3-trace/` contains SQLite3 source code
-10. `tpcc-sqlite/` contains TPCC source code
-11. `ycsb/` contains YCSB source code
-12. `tar/` contains tar source code
-13. `lmdb/` contains LMDB source code
-14. `filebench/` contains Filebench source code
-15. `fio/` contains FIO source code
-
-The [Experiments
-page](https://github.com/utsaslab/SplitFS/blob/master/experiments.md)
-has a list of experiments evaluating SplitFS(strict, sync and POSIX) vs ext4 DAX, NOVA-strict, NOVA-relaxed and PMFS. The summary is that SplitFS outperforms the other file systems on the data intensive workloads, while incurring a modest overhead on metadata heavy workloads. Please see the paper for more details.
-
-The kernel patch for the implementation of relink() system call for linux v4.13 is [here](https://github.com/utsaslab/SplitFS/blob/master/kernel/relink_v4.13.patch)
-
-## System Requirements
-
-1. Ubuntu 16.04 / 18.04
-2. At least 32 GB DRAM
-3. At least 4 cores
-4. Baremetal machine (Not a VM)
-5. Intel Processor supporting `clflush` (Comes with SSE2) or `clflushopt` (Introduced in Intel processor family -- Broadwell) instruction. This can be verified with `lscpu | grep clflush` and `lscpu | grep clflushopt` respectively.
+---
 
 ## Dependencies
-1. kernel: Installing the linux kernel 4.13.0 involves installing bc, libelf-dev and libncurses5-dev. For ubuntu, please run the script `cd dependencies; ./kernel_deps.sh; cd ..`
-2. SplitFS: Compiling SplitFS requires installing Boost. For Ubuntu, please run `cd dependencies; ./splitfs_deps.sh; cd ..`
 
-## Limitations
-SplitFS is under active development.
-1. The current implementation of SplitFS handles the following system calls: `open, openat, close, read, pread64, write, pwrite64, fsync, unlink, ftruncate, fallocate, stat, fstat, lstat, dup, dup2, execve and clone`. The rest of the calls are passed through to the kernel.
-2. The current implementation of SplitFS works correctly for the following applictions: `LevelDB running YCSB, SQLite running TPCC, tar, git, rsync`. This limitation is purely due to the state of the implementation, and we aim to increase the coverage of applications by supporting more system calls in the future.
+Required packages for kernel build and splitfs:
 
-## Applications currently supported
-1. LevelDB (with YCSB)
-2. SQLite (running TPCC)
-3. Redis
-3. git
-4. tar
-5. rsync
-6. Filebench
-7. LMDB
-8. FIO
-
-## Testing
-[PJD POSIX Test Suite](https://www.tuxera.com/community/posix-test-suite/) that tests primarily the metadata operations was run on SplitFS successfully. SplitFS passes all tests. 
-
-**Running the Test Suite**  
-Before running the tests, make sure you have [set-up ext4-DAX](#set-up-ext4-DAX)  
-
-To run tests in all modes:  
+```bash
+sudo apt update
+sudo apt install libelf-dev libncurses5-dev bc libboost-dev
 ```
-$ make test
+
+## Build & Install Kernel
+
+Build and install kernel deb packages (when menuconfig pops up, tweak any options as desired, or simply save & exit):
+
+```bash
+cd kernel
+./compile_kernel.sh <num_threads>
+sudo dpkg -i linux-*.deb
 ```
-To run tests in a specific mode:
+
+Check installed kernel's GRUB menu entry:
+
+```bash
+awk -F\' '$1=="menuentry " || $1=="submenu " {print i++ " : " $2}; /\tmenuentry / {print "\t" i-1">"j++ " : " $2};' /boot/grub/grub.cfg
 ```
-$ make -C tests pjd.<mode>
+
+Change GRUB config to boot into installed kernel:
+
+```bash
+sudo vim /etc/default/grub
+    # Say new kernel at 1>4, change to GRUB_DEFAULT="1>4"
+    # If emulating pmem device with DRAM, add `memmap=8G!4G nokaslr` to GRUB_CMDLINE_LINUX_DEFAULT
+    #   this reserves 8G starting at 4G offset of DRAM as `/dev/pmem0`
+sudo update-grub && sudo update-grub2
 ```
-where `<mode>` is one of `posix`, `sync` or `strict`.  Example: `make -C tests pjd.posix`  
 
-Tip: Redirect stderr for less verbose output: e.g `make test 2>/dev/null`
+Reboot and verify that the correct kernel is booted with the desired parameters:
 
-## Implementation Notes
-1. Only regular files, block special files, and directories (only for consistency guarantees) are handled by SplitFS, the other file types are delegated to POSIX.  
-2. Only files in the persistent memory mount (`/mnt/pmem_emul/`) are handled by SplitFS, rest are delegated to POSIX.  
-Currently this is only done by examination of absolute paths specified, we aim to have this check for relative paths too, soon.
-3. We aim to have the persistent-memory mount point controlled via a runtime environment variable soon.
+```bash
+sudo reboot
+uname -r            # should see 5.4.0-91-splitfs
+cat /proc/cmdline   # check boot parameters
+ls /dev             # should see /dev/pmem0
+```
 
-## License
+## Build SplitFS Library
 
-Copyright for SplitFS is held by the University of Texas at Austin. Please contact us if you would like to obtain a license to use SplitFS in your commercial product.
+Build SplitFS dynamic library:
 
-## Contributors
+```bash
+cd splitfs
+make clean && make
+cd ..
+```
 
-1. [Rohan Kadekodi](https://github.com/rohankadekodi), UT Austin
-2. [Rui Wang](https://github.com/wraymo), Beijing University of Posts and Telecommunications
-3. [Om Saran](https://github.com/OmSaran)
+Notice that setting `LEDGER_YCSB` environment variable is not set here. SplitFS source code uses macro flags (derived from environment variables) extensively to turn code pieces on/off... This is definitely a BAD DESIGN imo. I was only able to run the microbenchmark successfully without any `LEDGER_*` variables on.
 
-## Acknowledgements
+## Set Up Ext4-DAX
 
-We thank the National Science Foundation, VMware, Google, and Facebook for partially funding this project. We thank Intel and ETRI IITP/KEIT[2014-3-00035] for providing access to Optane DC Persistent Memory to perform our experiments.
+Format `pmem0` into ext4 and mount in DAX mode:
 
-## Contact
+```bash
+sudo mkfs.ext4 -b 4096 /dev/pmem0
+sudo mkdir /mnt/pmem_emul
+sudo mount -o dax /dev/pmem0 /mnt/pmem_emul
+sudo chown -R $USER /mnt/pmem_emul
+```
 
-Please contact us at `rak@cs.utexas.edu` or `vijayc@utexas.edu` with any questions.
+## Run Microbenchmark
+
+Build microbenchmark:
+
+```bash
+cd micro
+make
+cd ..
+```
+
+Run with raw ext4-DAX:
+
+```bash
+sudo sync && sudo bash -c 'echo 3 > /proc/sys/vm/drop_caches'
+./micro/rw_expt write seq 4096
+```
+
+In `splitfs/nvp_lock.h` line 55 the number of per-core locks is hardcoded (CAN YOU BELIEVE IT):
+
+```C
+    #define NVP_NUM_LOCKS   32      // == 2 * num of CPU cores
+```
+
+, so processes running over SplitFS must be on CPU core <= 15 if you have a machine with more cores. Core pinning could be done through `taskset`.
+
+Run with SplitFS:
+
+```bash
+rm -f /mnt/pmem_emul/append.log /mnt/pmem_emul/DR-* /mnt/pmem_emul/test.txt
+export LD_LIBRARY_PATH=$(realpath .)/splitfs
+export NVP_TREE_FILE=$(realpath .)/splitfs/bin/nvp_nvp.tree
+sudo sync && sudo bash -c 'echo 3 > /proc/sys/vm/drop_caches'
+taskset -c 0-7 bash -c 'LD_PRELOAD=$(realpath .)/splitfs/libnvp.so ./micro/rw_expt write seq 4096'
+```
+
+---
+
+## Application: LevelDB
+
+Get LevelDB and compile:
+
+```bash
+git clone https://github.com/google/leveldb.git
+cd leveldb
+git submodule update --init --recursive
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake --build . -j
+```
+
+Theoretically, LevelDB tests should run successfully through:
+
+```bash
+rm -f /mnt/pmem_emul/append.log /mnt/pmem_emul/DR-*
+mkdir /mnt/pmem_emul/leveldbdir
+export LD_LIBRARY_PATH=$(realpath .)/splitfs
+export NVP_TREE_FILE=$(realpath .)/splitfs/bin/nvp_nvp.tree
+taskset -c 0-7 bash -c 'LD_PRELOAD=/path/to/splitfs/libnvp.so TEST_TMPDIR=/mnt/pmem_emul/leveldbdir ./db_test'
+```
+
+However, on my side, SplitFS hangs in tests such as `SparseMerge`. I was not able to debug it because the source code looks like quite a mess.
