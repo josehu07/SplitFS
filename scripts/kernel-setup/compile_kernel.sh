@@ -9,19 +9,16 @@ threads=$1
 
 set -x
 
-cur_path=`readlink -f ./`
 src_path=`readlink -f ../../`
-kbuild_path=${src_path}/kernel/kbuild
+ksrc_path=${src_path}/kernel/linux-5.4
 
 # Go to kernel build path
-cd $kbuild_path
+cd $ksrc_path
 
-make -f Makefile.setup .config
-make -f Makefile.setup
-sleep 10
-make -j $threads # compile kernel
-sleep 10
-sudo make modules_install ; sudo make install # install modules
+make mrproper
+rm -rf debian
+rm -f vmlinux-gdb.py
 
-cd $script_path
-
+make menuconfig
+scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
+make -j$(threads) KDEB_PKGVERSION=1.splitfs deb-pkg
