@@ -22,4 +22,4 @@ rm -f vmlinux-gdb.py
 
 make menuconfig
 scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
-make -j$(threads) LOCALVERSION=-91-splitfs KDEB_PKGVERSION=1.splitfs deb-pkg
+make -j${threads} LOCALVERSION=-91-splitfs KDEB_PKGVERSION=1.splitfs deb-pkg
