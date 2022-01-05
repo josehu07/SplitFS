@@ -123,7 +123,7 @@ Get LevelDB and compile:
 git clone https://github.com/google/leveldb.git
 cd leveldb
 git submodule update --init --recursive
-mkdir build && cd build
+mkdir -p build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . -j
 ```
@@ -132,10 +132,10 @@ Theoretically, LevelDB tests should run successfully through:
 
 ```bash
 rm -f /mnt/pmem_emul/append.log /mnt/pmem_emul/DR-*
-mkdir /mnt/pmem_emul/leveldbdir
+mkdir -p /mnt/pmem_emul/leveldbdir
 export LD_LIBRARY_PATH=$(realpath .)/splitfs
 export NVP_TREE_FILE=$(realpath .)/splitfs/bin/nvp_nvp.tree
-taskset -c 0-7 bash -c 'LD_PRELOAD=/path/to/splitfs/libnvp.so TEST_TMPDIR=/mnt/pmem_emul/leveldbdir ./db_test'
+taskset -c 0-7 bash -c 'LD_PRELOAD=$(realpath .)/splitfs/libnvp.so TEST_TMPDIR=/mnt/pmem_emul/leveldbdir ./leveldb/build/leveldb_tests'
 ```
 
 However, on my side, SplitFS hangs in tests such as `SparseMerge`. I was not able to debug it because the source code looks like quite a mess.
