@@ -65,7 +65,7 @@ make clean && make
 cd ..
 ```
 
-Notice that setting `LEDGER_YCSB` environment variable is not set here. SplitFS source code uses macro flags (derived from environment variables) extensively to turn code pieces on/off... This is definitely a BAD DESIGN imo. I was only able to run the microbenchmark successfully without any `LEDGER_*` variables on.
+Notice that `LEDGER_YCSB` environment variable is not set here. SplitFS source code uses macro flags (derived from environment variables) extensively to turn code pieces on/off... I was only able to run the microbenchmark successfully without any `LEDGER_*` variables on.
 
 ## Set Up Ext4-DAX
 
@@ -95,7 +95,7 @@ sudo sync && sudo bash -c 'echo 3 > /proc/sys/vm/drop_caches'
 ./micro/rw_expt write seq 4096
 ```
 
-In `splitfs/nvp_lock.h` line 55 the number of per-core locks is hardcoded (CAN YOU BELIEVE IT):
+In `splitfs/nvp_lock.h` line 55 the number of per-core locks is hardcoded:
 
 ```C
     #define NVP_NUM_LOCKS   32      // == 2 * num of CPU cores
